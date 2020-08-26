@@ -2,6 +2,8 @@ import random
 from collections import Counter
 import numpy as np
 from scipy.stats import beta
+from tqdm import tqdm
+from num2words import num2words
 
 
 class FakeEntity:
@@ -44,6 +46,9 @@ class FakePhoto:
         self.contents = Counter()
         self.cont_list = []
 
+    def __repr__(self):
+        return "Photo{}".format(str(dict(self.contents)))
+
     def __str__(self):
         return "Photo{}".format(str(dict(self.contents)))
 
@@ -80,27 +85,15 @@ class FakePhoto:
 
 
 class FakeData:
-    n_det = {
-        1: "a",
-        2: "two",
-        3: "three",
-        4: "four",
-        5: "five",
-    }
-    n_verb = {
-        1: "is",
-        2: "are",
-        3: "are",
-        4: "are",
-        5: "are",
-    }
+    n_det = {k: ("a" if k == 1 else num2words(k)) for k in range(1, 10)}
+    n_verb = {k: ("is" if k == 1 else "are") for k in range(1, 10)}
     n_form = {
-        "cat": {1: "cat", 2: "cats", 3: "cats", 4: "cats", 5: "cats"},
-        "dog": {1: "dog", 2: "dogs", 3: "dogs", 4: "dogs", 5: "dogs"},
-        "man": {1: "man", 2: "men", 3: "men", 4: "men", 5: "men"},
-        "woman": {1: "woman", 2: "women", 3: "women", 4: "women", 5: "women"},
-        "stool": {1: "stool", 2: "stools", 3: "stools", 4: "stools", 5: "stools"},
-        "chair": {1: "chair", 2: "chairs", 3: "chairs", 4: "chairs", 5: "chairs"},
+        "cat": {k: ("cat" if k == 1 else "cats") for k in range(1, 10)},
+        "dog": {k: ("dog" if k == 1 else "dogs") for k in range(1, 10)},
+        "man": {k: ("man" if k == 1 else "men") for k in range(1, 10)},
+        "woman": {k: ("woman" if k == 1 else "women") for k in range(1, 10)},
+        "stool": {k: ("stool" if k == 1 else "stools") for k in range(1, 10)},
+        "chair": {k: ("chair" if k == 1 else "chairs") for k in range(1, 10)},
     }
     type_correspondences = {
         "cat": {
@@ -137,10 +130,10 @@ class FakeData:
         "white": {"close": {}, "not": {"black", "brown"}},
         "brown": {"close": {"black"}, "not": {"white"}},
     }
-    exact_dist = beta(10, 1)
-    close_dist = beta(8, 2)
-    ish_dist = beta(6, 4.5)
-    not_dist = beta(2, 6)
+    exact_dist = beta(5, 1.3)
+    close_dist = beta(5, 1.6)
+    ish_dist = beta(5, 2.5)
+    not_dist = beta(3.5, 5)
     class_cols = FakeEntity.possible_types + FakeEntity.possible_colors
 
     def __init__(self, n: int = 10):
@@ -151,7 +144,7 @@ class FakeData:
         self.utterances = []
         self.correct = []
         self.class_output = []
-        for p in self.photos:
+        for p in tqdm(self.photos):
             cl_ent_list = []
             for ent in p.cont_list:
                 ent_val_list = []
@@ -175,11 +168,20 @@ class FakeData:
                     ent_val_list.append(val)
                 cl_ent_list.append(ent_val_list)
             self.class_output.append(np.array(cl_ent_list))
-            if random.randint(0, 1):
-                rand_ent = FakeEntity.random_colorless()
+            if random.randint(0, 2) > 1:
+                if random.randint(0, 1):
+                    rand_ent = random.choice(p.cont_list)
+                    rand_n = random.randint(1, p.contents[rand_ent])
+                else:
+                    bla = random.choice(p.cont_list)
+                    rand_ent = FakeEntity(bla.my_type)
+                    rand_n = random.randint(1, p.contents[bla])
             else:
-                rand_ent = FakeEntity.random()
-            rand_n = random.randint(1, 5)
+                if random.randint(0, 1):
+                    rand_ent = FakeEntity.random_colorless()
+                else:
+                    rand_ent = FakeEntity.random()
+                rand_n = random.randint(1, 6)
             pic = FakePhoto()
             for _ in range(rand_n):
                 pic.add(rand_ent)

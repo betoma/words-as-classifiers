@@ -1,4 +1,5 @@
 from collections import defaultdict
+import torch
 import stanza
 
 
@@ -8,7 +9,16 @@ class DepParse:
         if parser:
             self.parser = parser
         else:
-            self.parser = stanza.Pipeline("en")
+            self.parser = stanza.Pipeline(
+                lang="en",
+                processors={
+                    "tokenize": "spacy",
+                    "mwt": "default",
+                    "pos": "default",
+                    "lemma": "default",
+                    "depparse": "default",
+                },
+            )
         self.raw_parse = None
         self.clean_parse = []
         self.both_parses = None
@@ -38,8 +48,7 @@ class DepParse:
         return children
 
     def get_NPs(self, doc):
-        if not self.raw_parse:
-            self.parse(doc)
+        self.parse(doc)
         if self.nps:
             self.nps = []
         sent_count = 0
@@ -47,6 +56,8 @@ class DepParse:
             headnouns = [word for word in sent[0].words if word.deprel == "nsubj"]
             mods = []
             for word in headnouns:
+                if word.lemma.endswith("."):
+                    word.lemma = word.lemma.rstrip(".")
                 modifiers = self.get_children(sent[1], int(word.id))
                 mods.append(modifiers)
             noun_phrases = zip(headnouns, mods)
