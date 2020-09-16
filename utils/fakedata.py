@@ -1,22 +1,34 @@
 import random
 from collections import Counter
+
 import numpy as np
-from scipy.stats import beta
-from tqdm import tqdm
 from num2words import num2words
+from scipy.stats import beta
+
+from .boxent import BoxofEntities
+
+
+class FakeWorld(BoxofEntities):
+    def __init__(
+        self,
+        n_confusers: """int between 1 and 10""" = 2,
+        n_colors: """int between 1 and 10""" = 3,
+    ):
+        if n_confusers <= 0 or n_confusers > 10 or n_colors <= 0 or n_colors > 10:
+            raise ValueError("Value for number of confusers is ")
+        self.possible_types = list(self.all_types)[0 : n_confusers * 3]
+        self.possible_colors = list(self.all_colors)[0:n_colors]
+        self.vocab_size = len(self.possible_types) + len(self.possible_colors)
 
 
 class FakeEntity:
-    possible_types = ["cat", "dog", "man", "woman", "stool", "chair"]
-    possible_colors = ["white", "black", "brown"]
-
-    def __init__(self, obj_type, color=None):
+    def __init__(self, world: FakeWorld, obj_type, color=None):
         """
-        a cat, dog, man, woman, tree, stool, or chair with a random color
+        an entity with a given color
         """
-        if obj_type not in self.possible_types:
+        if obj_type not in world.possible_types:
             raise ValueError
-        if color is not None and color not in self.possible_colors:
+        if color is not None and color not in world.possible_colors:
             raise ValueError
         self.my_type = obj_type
         self.my_color = color
@@ -31,14 +43,16 @@ class FakeEntity:
         return hash((self.my_type, self.my_color))
 
     @classmethod
-    def random(cls):
+    def random(cls, world: FakeWorld):
         return cls(
-            random.choice(cls.possible_types), random.choice(cls.possible_colors)
+            world,
+            random.choice(world.possible_types),
+            random.choice(world.possible_colors),
         )
 
     @classmethod
-    def random_colorless(cls):
-        return cls(random.choice(cls.possible_types))
+    def random_colorless(cls, world: FakeWorld):
+        return cls(world, random.choice(world.possible_types))
 
 
 class FakePhoto:
@@ -72,11 +86,11 @@ class FakePhoto:
         return all(check)
 
     @classmethod
-    def random(cls):
+    def random(cls, world: FakeWorld):
         pic = cls()
         n = random.randint(1, 25)
         for _ in range(n):
-            pic.add(FakeEntity.random())
+            pic.add(FakeEntity.random(world))
         return pic
 
     def add(self, entity: FakeEntity):
@@ -85,86 +99,39 @@ class FakePhoto:
 
 
 class FakeData:
-    n_det = {k: ("a" if k == 1 else num2words(k)) for k in range(1, 10)}
-    n_verb = {k: ("is" if k == 1 else "are") for k in range(1, 10)}
-    n_form = {
-        "cat": {k: ("cat" if k == 1 else "cats") for k in range(1, 10)},
-        "dog": {k: ("dog" if k == 1 else "dogs") for k in range(1, 10)},
-        "man": {k: ("man" if k == 1 else "men") for k in range(1, 10)},
-        "woman": {k: ("woman" if k == 1 else "women") for k in range(1, 10)},
-        "stool": {k: ("stool" if k == 1 else "stools") for k in range(1, 10)},
-        "chair": {k: ("chair" if k == 1 else "chairs") for k in range(1, 10)},
-    }
-    type_correspondences = {
-        "cat": {
-            "very close": {"dog"},
-            "close-ish": {"man", "woman"},
-            "not close": {"stool", "chair"},
-        },
-        "dog": {
-            "very close": {"cat"},
-            "close-ish": {"man", "woman"},
-            "not close": {"stool", "chair"},
-        },
-        "man": {
-            "very close": {"woman"},
-            "close-ish": {"cat", "dog"},
-            "not close": {"stool", "chair"},
-        },
-        "woman": {
-            "very close": {"man"},
-            "close-ish": {"cat", "dog"},
-            "not close": {"stool", "chair"},
-        },
-        "stool": {
-            "very close": {"chair"},
-            "close-ish": {},
-            "not close": {"man", "woman", "dog", "cat"},
-        },
-        "chair": {
-            "very close": {"stool"},
-            "close-ish": {},
-            "not close": {"man", "woman", "dog", "cat"},
-        },
-        "black": {"close": {"brown"}, "not": {"white"}},
-        "white": {"close": {}, "not": {"black", "brown"}},
-        "brown": {"close": {"black"}, "not": {"white"}},
-    }
-    exact_dist = beta(5, 1.3)
-    close_dist = beta(5, 1.6)
-    ish_dist = beta(5, 2.5)
-    not_dist = beta(3.5, 5)
-    class_cols = FakeEntity.possible_types + FakeEntity.possible_colors
+    n_det = {k: ("A/AN" if k == 1 else num2words(k)) for k in range(1, 20)}
+    n_verb = {k: ("is" if k == 1 else "are") for k in range(1, 20)}
 
-    def __init__(self, n: int = 10):
+    def __init__(self, world: FakeWorld, n: int = 10):
+        self.class_cols = world.possible_types + world.possible_colors
+        self.arr_cols = {k: i for i, k in enumerate(self.class_cols)}
+        self.n_form = {
+            word: {
+                k: word
+                if k == 1
+                else world.irregular_plurals[word]
+                if word in world.irregular_plurals
+                else word + "s"
+                for k in range(1, 20)
+            }
+            for word in world.possible_types
+        }
         self.photos = []
         for _ in range(n):
-            self.photos.append(FakePhoto.random())
+            self.photos.append(FakePhoto.random(world))
         self.checks = []
         self.utterances = []
         self.correct = []
         self.class_output = []
-        for p in tqdm(self.photos):
+        for p in self.photos:
             cl_ent_list = []
             for ent in p.cont_list:
                 ent_val_list = []
                 for t in self.class_cols:
-                    if t in FakeEntity.possible_types:
-                        if t == ent.my_type:
-                            val = self.exact_dist.rvs()
-                        elif t in self.type_correspondences[ent.my_type]["very close"]:
-                            val = self.close_dist.rvs()
-                        elif t in self.type_correspondences[ent.my_type]["close-ish"]:
-                            val = self.ish_dist.rvs()
-                        elif t in self.type_correspondences[ent.my_type]["not close"]:
-                            val = self.not_dist.rvs()
-                    elif t in FakeEntity.possible_colors:
-                        if t == ent.my_color:
-                            val = self.exact_dist.rvs()
-                        elif t in self.type_correspondences[ent.my_color]["close"]:
-                            val = self.close_dist.rvs()
-                        elif t in self.type_correspondences[ent.my_color]["not"]:
-                            val = self.not_dist.rvs()
+                    if t in world.possible_types:
+                        val = world.all_types[ent.my_type][t].rvs()
+                    elif t in world.possible_colors:
+                        val = world.all_colors[ent.my_color][t].rvs()
                     ent_val_list.append(val)
                 cl_ent_list.append(ent_val_list)
             self.class_output.append(np.array(cl_ent_list))
@@ -174,30 +141,39 @@ class FakeData:
                     rand_n = random.randint(1, p.contents[rand_ent])
                 else:
                     bla = random.choice(p.cont_list)
-                    rand_ent = FakeEntity(bla.my_type)
+                    rand_ent = FakeEntity(world, bla.my_type)
                     rand_n = random.randint(1, p.contents[bla])
             else:
                 if random.randint(0, 1):
-                    rand_ent = FakeEntity.random_colorless()
+                    rand_ent = FakeEntity.random_colorless(world)
                 else:
-                    rand_ent = FakeEntity.random()
+                    rand_ent = FakeEntity.random(world)
                 rand_n = random.randint(1, 6)
             pic = FakePhoto()
             for _ in range(rand_n):
                 pic.add(rand_ent)
             self.checks.append(pic)
             if pic in p:
-                self.correct.append(True)
+                self.correct.append(1)
             else:
-                self.correct.append(False)
+                self.correct.append(0)
             if rand_ent.my_color:
                 color = f"{rand_ent.my_color} "
+                first_word = color
             else:
                 color = ""
+                first_word = rand_ent.my_type
+            if rand_n == 1:
+                if first_word[0] in ["a", "e", "i", "o", "u"]:
+                    determiner = "an"
+                else:
+                    determiner = "a"
+            else:
+                determiner = self.n_det[rand_n]
             self.utterances.append(
                 "There {} {} {}{}.".format(
                     self.n_verb[rand_n],
-                    self.n_det[rand_n],
+                    determiner,
                     color,
                     self.n_form[rand_ent.my_type][rand_n],
                 )
@@ -210,6 +186,7 @@ class FakeData:
         return s
 
 
-if __name__ == "__main__":
-    d = FakeData(1)
-    print(d)
+# if __name__ == "__main__":
+#     w = FakeWorld()
+#     d = FakeData(w, 1)
+#     print(d)

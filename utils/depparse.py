@@ -19,21 +19,21 @@ class DepParse:
                     "depparse": "default",
                 },
             )
-        self.raw_parse = None
         self.clean_parse = []
-        self.both_parses = None
+        self.both_parses = []
         self.nps = []
 
-    def parse(self, doc):
-        self.raw_parse = self.parser(doc)
-        self.clean_parse = []
-        for sent in self.raw_parse.sentences:
+    @classmethod
+    def parse(cls, docs, **kwargs):
+        p = cls(**kwargs)
+        raw_parse = p.parser(docs)
+        for sent in raw_parse.sentences:
             head_dict = defaultdict(list)
             for word in sent.words:
                 head_dict[word.head].append(word)
-            self.clean_parse.append(dict(head_dict))
-        self.both_parses = zip(self.raw_parse.sentences, self.clean_parse)
-        return self.both_parses
+            p.clean_parse.append(dict(head_dict))
+        p.both_parses = zip(raw_parse.sentences, p.clean_parse)
+        return p
 
     @staticmethod
     def get_children(sentence: """a sentence from within clean_parse""", index: int):
@@ -47,12 +47,9 @@ class DepParse:
         children.extend(grandchildren)
         return children
 
-    def get_NPs(self, doc):
-        self.parse(doc)
-        if self.nps:
-            self.nps = []
-        sent_count = 0
+    def get_NPs(self, docs):
         for sent in self.both_parses:
+            sent_nouns = []
             headnouns = [word for word in sent[0].words if word.deprel == "nsubj"]
             mods = []
             for word in headnouns:
@@ -65,6 +62,6 @@ class DepParse:
                 flat_list = [pair[0]] + pair[1]
                 s_list = sorted(flat_list, key=lambda k: int(k.id))
                 np_string = " ".join([x.text for x in s_list])
-                self.nps.append((sent_count, np_string, pair))
-            sent_count += 1
+                sent_nouns.append((np_string, pair))
+            self.nps.append(sent_nouns)
         return self.nps
