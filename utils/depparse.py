@@ -47,7 +47,7 @@ class DepParse:
         children.extend(grandchildren)
         return children
 
-    def get_NPs(self, docs):
+    def get_NPs(self):
         for sent in self.both_parses:
             sent_nouns = []
             headnouns = [word for word in sent[0].words if word.deprel == "nsubj"]

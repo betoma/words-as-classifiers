@@ -13,7 +13,9 @@ class FakeWorld(BoxofEntities):
         self,
         n_confusers: """int between 1 and 10""" = 2,
         n_colors: """int between 1 and 10""" = 3,
+        **kwargs,
     ):
+        super(FakeWorld, self).__init__(**kwargs)
         if n_confusers <= 0 or n_confusers > 10 or n_colors <= 0 or n_colors > 10:
             raise ValueError("Value for number of confusers is ")
         self.possible_types = list(self.all_types)[0 : n_confusers * 3]

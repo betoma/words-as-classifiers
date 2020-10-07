@@ -1,35 +1,30 @@
-import numpy
+import numpy as np
 from num2words import num2words
-from sklearn.base import BaseEstimator
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, f1_score
 from sklearn.utils.validation import check_is_fitted
 
 from .depparse import DepParse
+from .fakedata import FakeData
 
 
-class SemParse(BaseEstimator):
+class SemParse:
     numbers = {num2words(n): n for n in range(1, 20)}
 
-    def __init__(self, threshold: float = 0.8, parser=None):
-        self.threshold = threshold
-        self.np_sent_list = []
-        self.X_ = []
-        if parser:
-            self.parser = parser
-        else:
-            self.parser = DepParse()
+    def __init__(self, parser=None):
+        self.parser = parser
 
-    def parse(
-        self, joined_data: """sentences separated by two newlines all as one string"""
-    ):
-        nps_per_sent = self.parser.get_NPs(joined_data)
-        for nps in nps_per_sent:
+    def parse(self, dataset: FakeData):
+        joined_data = "\n\n".join(dataset.utterances)
+        np_sent_list = []
+        depparser = DepParse.parse(joined_data, parser=self.parser)
+        nps_per_sent = depparser.get_NPs()
+        for noun_phrases in nps_per_sent:
             np_list = []
-            for np in nps:
-                head_classifier = np[1][0].lemma
+            for n in noun_phrases:
+                head_classifier = n[1][0].lemma
                 attr_classifier = None
                 req_num = None
-                for word in np[1][1]:
+                for word in n[1][1]:
                     if word.upos == "ADJ":
                         attr_classifier = word.lemma
                     elif word.upos in {"DET", "NUM"}:
@@ -37,41 +32,50 @@ class SemParse(BaseEstimator):
                             req_num = 1
                         elif word.lemma in self.numbers:
                             req_num = self.numbers[word.lemma]
-                np_list.append((np[0], (head_classifier, attr_classifier, req_num)))
-            self.np_sent_list.append(np_list)
+                np_list.append((n[0], (head_classifier, attr_classifier, req_num)))
+            np_sent_list.append(np_list)
+        return np_sent_list
 
-    def fit(
-        self,
-        X: """FakeData.class_output""",
-        y: """FakeData.correct""",
-        joined_data: """FakeData.utterances joined by two newlines""" = None,
-        arr_cols: """FakeData.arr_cols""" = None,
-    ):
-        """
-        Takes the output of the classifier in dataset from FakeData class instance and applies a given threshold to determine each entity's binary value for the np from the corresponding sentence in self.np_list
-        """
-        self.parse(joined_data)
-        self.X_ = []
-        for i, sent in enumerate(self.np_sent_list):
+
+class ClassicalSem(SemParse):
+    def __init__(self, *args, threshold: float = 0.8, **kwargs):
+        super(ClassicalSem, self).__init__(*args, **kwargs)
+        self.threshold = threshold
+
+    def set_threshold(self, new_threshold: float):
+        self.threshold = new_threshold
+
+    def classify(self, dataset: FakeData):
+        parsed_sentences = self.parse(dataset)
+        labels = []
+        for i, sent in enumerate(parsed_sentences):
             per_sent = []
-            for np in sent:
-                n_col_no = arr_cols[np[1][0]]
-                n_arr = X[i][:, n_col_no]
-                if np[1][1]:
-                    a_col_no = arr_cols[np[1][1]]
-                    a_arr = X[i][:, a_col_no]
-                    n_arr = numpy.true_divide(numpy.add(n_arr, a_arr), 2)
-                per_sent.append((n_arr > self.threshold, np[1][2]))
-            self.X_.append(per_sent)
-        return self
+            classification_array = dataset.class_output[i] > self.threshold
+            for n in sent:
+                n_col_no = dataset.arr_cols[n[1][0]]
+                n_class = classification_array[:, n_col_no]
+                if n[1][1]:
+                    a_col_no = dataset.arr_cols[n[1][1]]
+                    a_class = classification_array[:, a_col_no]
+                    output_val = n_class & a_class
+                else:
+                    output_val = n_class
+                per_sent.append((output_val, n[1][2]))
+            labels.append(per_sent)
+        return labels
 
-    def predict(self, X=None):
-        """turn the binary sets produced in fit() into truth values based on the utterances in the data set"""
-        check_is_fitted(self)
-        return [int(all([z[0].sum() >= z[1] for z in x])) for x in self.X_]
+    def predict(self, dataset: FakeData, labels: """list of lists of labels""" = None):
+        if not labels:
+            labels = self.classify(dataset)
+        return [int(all([z[0].sum() >= z[1] for z in x])) for x in labels]
 
-    def score(self, X, y):
-        return accuracy_score(self.predict(), y)
+    def score(self, dataset: FakeData, results: """list of bools""" = None, **kwargs):
+        if not results:
+            results = self.predict(dataset, **kwargs)
+        return (
+            accuracy_score(results, dataset.correct),
+            f1_score(results, dataset.correct),
+        )
 
 
 if __name__ == "__main__":
