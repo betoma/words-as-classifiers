@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 from num2words import num2words
 from sklearn.metrics import accuracy_score, f1_score
@@ -75,6 +77,92 @@ class ClassicalSem(SemParse):
         return (
             accuracy_score(results, dataset.correct),
             f1_score(results, dataset.correct),
+        )
+
+
+class FuzzySem(SemParse):
+    def __init__(self, *args, **kwargs):
+        super(FuzzySem, self).__init__(*args, **kwargs)
+
+    @staticmethod
+    def prob_at_least(p_e: """list of probabilities""", m: int):
+        e = len(p_e)
+        p = [[0 for j in range(e + 1)] for i in range(e + 1)]
+        p[0][0] = 1
+        for i in range(1, e + 1):
+            p[i][0] = p[i - 1][0] * (1 - p_e[i - 1])
+            for j in range(1, e + 1):
+                p[i][j] = p[i - 1][j] * (1 - p_e[i - 1]) + p[i - 1][j - 1] * p_e[i - 1]
+        ans = 0.0
+        for j in range(m, e + 1):
+            ans += p[e][j]
+        return ans
+
+    def predict(self, dataset: FakeData):
+        parsed_sentences = self.parse(dataset)
+        labels = []
+        for i, sent in enumerate(parsed_sentences):
+            per_sent = []
+            for n in sent:
+                n_col_no = dataset.arr_cols[n[1][0]]
+                output = dataset.class_output[i][:, n_col_no]
+                if n[1][1]:
+                    a_col_no = dataset.arr_cols[n[1][1]]
+                    a_class = dataset.class_output[i][:, a_col_no]
+                    output = np.multiply(output, a_class)
+                per_sent.append((output, n[1][2]))
+            labels.append(per_sent)
+        return [math.prod([self.prob_at_least(z[0], z[1]) for z in x]) for x in labels]
+
+    def binary_score(
+        self,
+        dataset: FakeData,
+        threshold: float,
+        results: """list of floats between 0.0 and 1.0""" = None,
+        **kwargs
+    ):
+        if not results:
+            results = self.predict(dataset, **kwargs)
+        binary_class = [int(x >= threshold) for x in results]
+        return (
+            accuracy_score(binary_class, dataset.correct),
+            f1_score(binary_class, dataset.correct),
+        )
+
+    def split(
+        self,
+        dataset: FakeData,
+        results: """list of floats between 0.0 and 1.0""" = None,
+        **kwargs
+    ):
+        if not results:
+            results = self.predict(dataset, **kwargs)
+        true_vals = []
+        false_vals = []
+        for i, r in enumerate(results):
+            if dataset.correct[i] == 1:
+                true_vals.append(r)
+            else:
+                false_vals.append(r)
+        return true_vals, false_vals
+
+    def score(
+        self,
+        *args,
+        true_vals: """list of floats""" = None,
+        false_vals: """list of floats""" = None,
+        **kwargs
+    ):
+        if not (true_vals and false_vals):
+            true_vals, false_vals = self.split(*args, **kwargs)
+        return (
+            (np.mean(true_vals), np.median(true_vals), max(true_vals), min(true_vals)),
+            (
+                np.mean(false_vals),
+                np.median(false_vals),
+                max(false_vals),
+                min(false_vals),
+            ),
         )
 
 
