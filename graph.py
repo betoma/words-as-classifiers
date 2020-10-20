@@ -22,7 +22,11 @@ for ax, model, random in zip(axes.flatten(), vv, rvv):
     ra = [y[1] for y in random[1]]
     ax.plot(thresholds, a, lw=5, alpha=0.8, label="semantic")
     ax.plot(thresholds, ra, lw=5, alpha=0.8, label="random")
-    ax.set(title=f"{model[0]} Confusors", xlabel="Threshold value", ylabel="Accuracy")
+    ax.set(
+        title=f"{model[0]} per class in vocab",
+        xlabel="Threshold value",
+        ylabel="Accuracy",
+    )
 handles, labels = ax.get_legend_handles_labels()
 fig.legend(
     handles, labels, title="Prediction Method", loc="lower center",  # mode="expand",
