@@ -19,25 +19,22 @@ torch.cuda.empty_cache()
 
 fig, ax = plt.subplots(1, 1)
 a, b = 5, 1.3
-a2, b2 = 5, 1.4
-a3, b3 = 5, 1.5
-a4, b4 = 5, 2.2
-a5, b5 = 4, 5
+a2, b2 = 5, 1.5
+a3, b3 = 5, 2.2
+a4, b4 = 4, 5
 
 x = np.linspace(beta.ppf(0.01, 1, 1), beta.ppf(0.99, 1, 1), 100)
 ax.plot(x, beta.pdf(x, a, b), "k-", lw=5, alpha=0.8)
-ax.plot(x, beta.pdf(x, a2, b2), "g-", lw=5, alpha=0.6)
-ax.plot(x, beta.pdf(x, a3, b3), "b-", lw=5, alpha=0.6)
-ax.plot(x, beta.pdf(x, a4, b4), "y-", lw=5, alpha=0.6)
-ax.plot(x, beta.pdf(x, a5, b5), "r-", lw=5, alpha=0.6)
+ax.plot(x, beta.pdf(x, a2, b2), "b-", lw=5, alpha=0.6)
+ax.plot(x, beta.pdf(x, a3, b3), "y-", lw=5, alpha=0.6)
+ax.plot(x, beta.pdf(x, a4, b4), "r-", lw=5, alpha=0.6)
 plt.savefig("images/classifier_distributions.png", bbox_inches="tight")
 
 distributions = {
     "exact": beta(a, b),
-    "super": beta(a2, b2),
-    "close": beta(a3, b3),
-    "ish": beta(a4, b4),
-    "not": beta(a5, b5),
+    "close": beta(a2, b2),
+    "ish": beta(a3, b3),
+    "not": beta(a4, b4),
 }
 
 p = stanza.Pipeline(
@@ -55,9 +52,11 @@ thresholds = list(np.linspace(0.7, 0.9, 20))
 examples_per_dataset = 150
 values = []
 random_values = []
+# ent_random_values = []
 for n in trange(1, 11):
     vals = []
     rand_vals = []
+    # ent_rand_vals = []
     w = FakeWorld(n, n, dists=distributions)
     s = ClassicalSem(parser=p)
     for t in tqdm(thresholds):
@@ -79,6 +78,7 @@ for n in trange(1, 11):
             rand_f1_scores.append(rand_f1)
         vals.append((t, acc_scores, f1_scores))
         rand_vals.append((t, rand_acc_scores, rand_f1_scores))
+        # ent_rand_vals.append((t, ent_rand_acc_scores, ent_rand_f1_scores))
     values.append((n, vals))
     random_values.append((n, rand_vals))
 
@@ -86,9 +86,16 @@ vv = [(x[0], [(y[0], np.mean(y[1]), np.mean(y[2])) for y in x[1]]) for x in valu
 rvv = [
     (x[0], [(y[0], np.mean(y[1]), np.mean(y[2])) for y in x[1]]) for x in random_values
 ]
+# ervv = [
+#     (x[0], [(y[0], np.mean(y[1]), np.mean(y[2])) for y in x[1]])
+#     for x in ent_random_values
+# ]
 
 with open("data/naive_sem_results", "wb") as f:
     pickle.dump(vv, f)
 
 with open("data/rand_results", "wb") as f:
     pickle.dump(rvv, f)
+
+# with open("data/ent_rand_results", "wb") as f:
+#     pickle.dump(ervv, f)
