@@ -11,9 +11,9 @@ import stanza
 import torch
 from tqdm import tqdm, trange
 
-from utils.depparse import DepParse
-from utils.fakedata import FakeWorld, FakeData
-from utils.semparse import ClassicalSem
+from bet_utils.depparse import DepParse
+from bet_utils.fakedata import FakeWorld, FakeData
+from bet_utils.semparse import ClassicalSem
 
 torch.cuda.empty_cache()
 
